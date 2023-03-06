@@ -99,6 +99,10 @@ class EmptyMatchError(MarnError):
 class UnnamedCaseError(MarnError):
     location : Location
 
+@dataclass
+class UnclosedDipError(MarnError):
+    location : Location
+
 
 # Lexing data types #
 
@@ -149,6 +153,7 @@ class KeywordEnum(Enum):
     OPEN_BRACKET = auto()
     CLOSE_BRACKET = auto()
     EOF = auto()
+    DIP = auto()
 
 keywords = {
     ':': KeywordEnum.COLON,
@@ -158,6 +163,7 @@ keywords = {
     'loop;': KeywordEnum.LOOP,
     'type:': KeywordEnum.TYPE,
     'alias:': KeywordEnum.ALIAS,
+    'dip:': KeywordEnum.DIP,
     '[': KeywordEnum.OPEN_BRACKET,
     ']': KeywordEnum.CLOSE_BRACKET,
 }
@@ -332,6 +338,10 @@ class MatchNode(Node):
     cases : list[CaseNode]
 
 @dataclass
+class DipNode(Node):
+    body : list[Node]
+
+@dataclass
 class WordNode(Node):
     name : str
     body : list
@@ -383,7 +393,7 @@ class AST:
 '''
 
 program         := ( definition | comment ) [ program ]
-exprs           := ( literal | match | name | comment ) [ exprs ]
+exprs           := ( literal | match | dip | name | comment ) [ exprs ]
 definition      := word | type | alias
 literal         := int | nat | string | bool | list
 match           := 'match:' cases
@@ -425,7 +435,11 @@ def parse_match(generator, location, errors) -> Optional[MatchNode]:
     else:
         return MatchNode(location, cases)
 
-def parse_expressions(generator, errors, EOF_error) -> Optional[Node]:
+def parse_dip(generator, location, errors) -> DipNode:
+    return DipNode(location, parse_expressions(generator, errors,
+                                               UnclosedDipError))
+
+def parse_expressions(generator, errors, EOF_error) -> list[Node]:
     exprs = []
     while True:
         match generator.peek:
@@ -437,7 +451,11 @@ def parse_expressions(generator, errors, EOF_error) -> Optional[Node]:
                 exprs.append(LiteralNode(location, value))
             case KeywordToken(location=location, keyword=KeywordEnum.MATCH):
                 next(generator)
-                exprs.append(parse_match(generator, location, errors))
+                if match := parse_match(generator, location, errors):
+                    exprs.append(match)
+            case KeywordToken(location=location, keyword=KeywordEnum.DIP):
+                next(generator)
+                exprs.append(parse_dip(generator, location, errors))
             case NameToken(location=location, name=name):
                 next(generator)
                 exprs.append(NameNode(location, name))
