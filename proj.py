@@ -154,6 +154,9 @@ class KeywordEnum(Enum):
     CLOSE_BRACKET = auto()
     EOF = auto()
     DIP = auto()
+    TIMES = auto()
+    EACH = auto()
+    MAP = auto()
 
 keywords = {
     ':': KeywordEnum.COLON,
@@ -164,6 +167,9 @@ keywords = {
     'type:': KeywordEnum.TYPE,
     'alias:': KeywordEnum.ALIAS,
     'dip:': KeywordEnum.DIP,
+    'times:': KeywordEnum.TIMES,
+    'each:': KeywordEnum.EACH,
+    'map:': KeywordEnum.MAP,
     '[': KeywordEnum.OPEN_BRACKET,
     ']': KeywordEnum.CLOSE_BRACKET,
 }
@@ -332,13 +338,15 @@ class NameNode(Node):
 class CaseNode(Node):
     constructor : 'NameNode | ConstructorNode'
     body : list[Node]
+    loop : bool
 
 @dataclass
 class MatchNode(Node):
     cases : list[CaseNode]
 
 @dataclass
-class DipNode(Node):
+class BlockNode(Node):
+    keyword: KeywordEnum
     body : list[Node]
 
 @dataclass
@@ -392,12 +400,15 @@ class AST:
 
 '''
 
+TODO: do: while:, if: else:
+
 program         := ( definition | comment ) [ program ]
-exprs           := ( literal | match | dip | name | comment ) [ exprs ]
+exprs           := ( literal | match | block | name | comment ) [ exprs ]
+block           := ( 'dip:' | 'times:' | 'each:' | 'map:' ) exprs ';'
 definition      := word | type | alias
 literal         := int | nat | string | bool | list
 match           := 'match:' cases
-cases           := 'case:' exprs ';' [ cases ]
+cases           := 'case:' exprs ( ';' | 'loop;' ) [ cases ]
 word            := ':' name [ exprs ] ';'
 type            := 'type:' [ names ] name ':' constructors ';'
 constructors    := [ names ] name [ '|' constructors ]
@@ -413,9 +424,10 @@ def parse_case(generator, location, errors) -> Optional[CaseNode]:
         case _:
             errors.append(UnnamedCaseError(location))
             name = None
-    body = parse_expressions(generator, errors, UnclosedWordError)
+    body, delim = parse_expressions(generator, errors, UnclosedWordError,
+                                    (KeywordEnum.SEMICOLON, KeywordEnum.LOOP))
     if constructor:
-        return CaseNode(location, constructor, body)
+        return CaseNode(location, constructor, body, delim == KeywordEnum.LOOP)
     
 
 def parse_match(generator, location, errors) -> Optional[MatchNode]:
@@ -435,17 +447,26 @@ def parse_match(generator, location, errors) -> Optional[MatchNode]:
     else:
         return MatchNode(location, cases)
 
-def parse_dip(generator, location, errors) -> DipNode:
-    return DipNode(location, parse_expressions(generator, errors,
-                                               UnclosedDipError))
 
-def parse_expressions(generator, errors, EOF_error) -> list[Node]:
+block_keywords = {
+    KeywordEnum.DIP,
+    KeywordEnum.TIMES,
+    KeywordEnum.EACH,
+    KeywordEnum.MAP,
+}
+def parse_block(generator, errors) -> BlockNode:
+    token = next(generator)
+    return BlockNode(token.location, token.keyword,
+                     parse_expressions(generator, errors, UnclosedDipError)[0])
+
+def parse_expressions(generator, errors, EOF_error,
+                      terminators=(KeywordEnum.SEMICOLON,)) -> list[Node]:
     exprs = []
     while True:
         match generator.peek:
-            case KeywordToken(keyword=KeywordEnum.SEMICOLON):
+            case KeywordToken(keyword=keyword) if keyword in terminators:
                 next(generator)
-                return exprs
+                return exprs, keyword
             case LiteralToken(location=location, value=value):
                 next(generator)
                 exprs.append(LiteralNode(location, value))
@@ -453,9 +474,8 @@ def parse_expressions(generator, errors, EOF_error) -> list[Node]:
                 next(generator)
                 if match := parse_match(generator, location, errors):
                     exprs.append(match)
-            case KeywordToken(location=location, keyword=KeywordEnum.DIP):
-                next(generator)
-                exprs.append(parse_dip(generator, location, errors))
+            case KeywordToken(keyword=keyword) if keyword in block_keywords:
+                exprs.append(parse_block(generator, errors))
             case NameToken(location=location, name=name):
                 next(generator)
                 exprs.append(NameNode(location, name))
@@ -475,7 +495,7 @@ def parse_word(generator, location, errors) -> Optional[WordNode]:
         case _:
             errors.append(UnnamedWordError(location))
             name = None
-    body = parse_expressions(generator, errors, UnclosedWordError)
+    body = parse_expressions(generator, errors, UnclosedWordError)[0]
     if name:
         return WordNode(location, name, body)
 
@@ -545,3 +565,8 @@ def test(s : str) -> AST | list[MarnError]:
     a = parse_tokens(l, e)
     if e: return e
     return a
+
+fib = '''
+: fib ( n -- f(n) )
+  0 1 rot times: over + swap ; drop ;
+'''
