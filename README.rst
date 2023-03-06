@@ -34,3 +34,6 @@ fibonacci into ``test`` it should spit out the AST for it::
       0 1 rot match:
         case: Succ dip: over + swap ; ;
         case: Zero drop ; ;
+
+.. Links:
+.. _proj.py: ./proj.py
