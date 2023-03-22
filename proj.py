@@ -570,3 +570,30 @@ fib = '''
 : fib ( n -- f(n) )
   0 1 rot times: over + swap ; drop ;
 '''
+
+fizzbuzz = '''
+alias: FizzBuzzList : Int String 2Tuple List ;
+
+: fizzbuzz ( FizzBuzzList Int -- )
+  0 swap times:
+    1 + 2dup fizzbuzz.step ;
+  2drop ;
+
+: fizzbuzz.step ( FizzBuzzList Int -- )
+  "" -rot swap each:
+    2unpack dip: over = ;
+    swap if: rot swap join swap else: drop ; ;
+  over length 0 > if: drop else: nip Int>String ;
+  print ;
+'''
+
+heap = '''
+alias: n Heap : n Tree Maybe ;
+
+type: n Tree : n n Tree List Tree ;
+
+: meld ( Heap Heap -- Heap )
+  match: case: Nothing ; case: Just
+    swap match: case: Nothing ; case: Just
+      
+'''

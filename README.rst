@@ -5,6 +5,12 @@
 A language that will hopefully be accepted as the project for the TKOM course.
 Clearly unfinished.
 
+**Important**: This project will be developed on a hidden repo on WUT gitlab for
+now because of grading requirements. Whenever I have time I will try to update
+this repo with info from that other one, but they require a more rigid repo
+structure so I can't just copy this one. I could probably do it nicely with some
+git magic, but cant be bothered.
+
 
 Usage
 =====
